@@ -1,0 +1,24 @@
+---
+title: "MAST32001 Computational Statistics"
+Subtitle: "Exercises 3 — Permutation Tests and the Bootstrap"
+author: "Zhi Zhou"
+format: typst
+editor: visual
+---
+
+# Exercise 1 — What may be permuted?
+
+## Task 1
+
+Think of 24 people. 12 were picked at random for the treatment and 12 for the control. If the treatment does nothing, each person's score is just their own fixed level. The "treated"/"control" sticker is only a label on their chest. Under the sharp null $Y_i(i)=Y_i(0)=Y_i$, every unit carries a single fixed response and only the assignment vector varies. Random assignment makes every $\binom{24}{12}$ split 12 treated, 12 control equally likely, so peeling the labels off and pasting them back them just reconstructs another assignment the design was equally likely to have produced. The treatment labels are therefore exchangeable under $H_0$, and the reference distribution is built by re-randomizing the 12/12 labels across the 24 fixed responses.
+
+## Task 2
+
+Here nobody drew lots. We simply took 12 observations from population 1 and 12 from population 2. But under the null $F_1=F_2$, those two samples are all i.i.d. draw from one and the same distribution $F$. With 24 i.i.d. values, "which 12 happened to land in group 1" is just wherever your scoop landed in a common tub. Every partition into two sets of 12 is equally likely to have been that group. The group tags are therefore arbitrary and exchangeable. The catch is that this ex changeability is an implication of $H_0$, not of randomization: it holds only because the null claims the two populations are identical, and it breaks down under the alternative $F_1\neq F_2$.
+
+## Task 3
+
+These 24 measurements are not 24 independent values; they are 12 matched pairs. The same 12 people measured before and after an intervention. A useful model is $$B_j=\mu+\alpha_j+\varepsilon_{j,B},\qquad A_j=\mu+\alpha_j+\tau+\varepsilon_{j,A},$$
+where $\alpha_j$ is a large person-specific effect. The within-paired difference$D_j=A_j-B_j$ is what cancels $alpha_j$, and that cancellation is whole reason for matching.
+
+Freely shuffling all 24 labels destroy exactly this. It re-pairs, say
