@@ -1,0 +1,10 @@
+---
+title: "MAST32001 Week 3 Summary"
+author: "Zhi Zhou"
+format: typst
+editor: visual
+---
+
+This week, we covered permutation and randomization tests in Lecture 5, followed by the bootstrap and jackknife for idd data in Lecture 6. These methods use the data we have to help us make statistical inferences without replying on theoretical formulas. Permutation and randomization tests help us assess evidence against a null hypothesis, while the bootstrap and jackknife can help us estimate uncertainty or bias. What stood out to me was that we still need to think carefully about the assumption. Shuffling labels might seem straightforward, but it is only valid if those labels can be exchanged under the null hypothesis. Similarly, when we resample observations, we need to consider whether that procedure makes sense for the way the data were collected. For me, the main takeaway was that knowing what to shuffle or resample matters just as much as knowing how to run the code.
+
+In the permutation lecture, the central idea was that under a "no difference" null, certain labels or observations are interchangeable, so any valid rearrangement of the data should be just as plausible as what we actually observed. The
