@@ -66,26 +66,11 @@ Master's Programme in Mathematics and Statistics, University of Helsinki.
 ## Week 3 — 
 
 ### Lecture 5 — 
-- **Topic:** 
-- **Slides:** 
-- **Reading:** 
-- **Exercises:**
-- **Exercise session (Thu):** 
 
 ### Lecture 6 — 
-- **Topic:** 
-- **Slides:** 
-- **Reading:** 
-- **Assignment presentations (Thu afternoon):** 
 
 ---
 
-
-## Progress
-
-- [x] **Week 1** — 
-- [ ] **Week 2** — 
-- [ ] **Week 3** — 
 
 ## License
 
