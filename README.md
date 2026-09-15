@@ -86,9 +86,9 @@ Master's Programme in Mathematics and Statistics, University of Helsinki.
 
 ## Progress
 
-- [ ] **Week 1** — Lec 1: Introduction & functions in R · Lec 2: OOP & density estimation
-- [ ] **Week 2** — Lec 3: Measuring/improving performance · Lec 4: Parallelization & scatterplot smoothing
-- [ ] **Week 3** — Lec 5: Transformation & rejection sampling · Lec 6: Monte Carlo & importance sampling
+- [x] **Week 1** — 
+- [ ] **Week 2** — 
+- [ ] **Week 3** — 
 
 ## License
 
