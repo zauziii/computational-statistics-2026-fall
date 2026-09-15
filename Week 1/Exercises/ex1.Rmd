@@ -1,0 +1,294 @@
+---
+title: "Computational Statistics Exercises 1"
+author: "Zhi Zhou"
+date: "2026-09-01"
+output: html_document
+---
+
+```{r, warning=FALSE, message=FALSE}
+# Load
+library(tidyverse)
+```
+
+# Exercise 1 - Variance after a change of origin
+
+## Task 1, 2 and 3
+
+```{r TASK 1-3}
+# Reproduce the exact dataset from the exercise
+set.seed(1)
+z <- rnorm(100000, mean = 0, sd = 3)
+offsets <- c(0, 1e4, 1e8, 1e12, 1e14)
+n <- length(z)
+
+# Define the two-pass and one-pass algorithms 
+# two-pass algorithm
+var2pass <- function(x) {
+  m <- mean(x)            
+  sum((x - m) ** 2) / (n - 1)
+}
+
+# one-pass computational formula
+var1pass <- function(x) {
+  (sum(x ** 2) - sum(x) ** 2 / n) / (n - 1)
+}
+
+# Run all three methods at every offset
+res <- data.frame(
+  a = offsets,
+  var_r = NA,
+  two_pass = NA,
+  one_pass = NA
+)
+variances <- sapply(offsets, function(o) {
+  x <- o + z                 # Task 1 !!!
+  c(                         # Task 2 !!!
+    var_r = var(x),
+    two_pass = var2pass(x),
+    one_pass = var1pass(x)
+  )
+})                           # Task 3 !!!
+
+res$var_r <- variances["var_r", ]
+res$two_pass <- variances["two_pass", ]
+res$one_pass <- variances["one_pass", ]
+res
+```
+
+## Task 4
+
+```{r, fig.height=6, fig.width=7}
+# Compare with var(z)
+rel <- data.frame(
+  a        = offsets,
+  var_r    = abs(res$var_r    - var(z)) / var(z),
+  two_pass = abs(res$two_pass - var(z)) / var(z),
+  one_pass = abs(res$one_pass - var(z)) / var(z)
+)
+# Print the comparison table
+rel
+# Print the reference value
+cat("var(z) =", var(z), "\n")
+# Find the threshold, where first offset with more than 10% one-pass error
+cat("one-pass error > 10% first at a =", res$a[which(rel$one_pass > 0.1)[1]], "\n")
+ 
+# Figure: relative error vs offset (log-log)
+# Reshape the table to long format, one row per (offset, method)
+rel_long <- data.frame(
+  a = rep(offsets, 3),
+  method = rep(c("var(x)", "two-pass", "one-pass"), each = length(offsets)),
+  rel = c(rel$var_r, rel$two_pass, rel$one_pass)
+)
+# Drop a=0, as error is exactly 0 and no log
+rel_long <- rel_long |> filter(a > 0)
+# Floor tiny values so log works
+rel_long$rel <- rel_long$rel |> (\(x) pmax(x, 1e-16))()
+
+ggplot(rel_long, aes(
+  x = a,
+  y = rel,
+  color = method,
+  shape = method
+)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2.5) +
+  scale_x_log10() +
+  scale_y_log10() +
+  coord_cartesian(ylim = c(1e-16, 1e12)) +
+  geom_hline(
+    yintercept = c(1e-3, 1e-1, 1),
+    linetype = "dotted",
+    color = "grey50"
+  ) +
+  annotate(
+    "text",
+    x = 3e9,
+    y = c(3e-3, 3e-1, 3),
+    label = c("0.1%", "10%", "100%"),
+    color = "grey40",
+    size = 3
+  ) +
+  annotate(
+    "rect",
+    xmin = 1e8,
+    xmax = 1e14,
+    ymin = 1e-16,
+    ymax = 1e12,
+    fill = "darkred",
+    alpha = 0.1
+  ) +
+  annotate(
+    "text",
+    x = 2e9,
+    y = 1e9,
+    color = "darkred",
+    label = "total cancellation",
+    size = 3
+  ) +
+  scale_color_manual(values = c(
+    "var(x)" = "darkblue",
+    "two-pass" = "darkgreen",
+    "one-pass" = "darkorange"
+  )) +
+  scale_shape_manual(values = c(
+    "var(x)" = 16,
+    "two-pass" = 17,
+    "one-pass" = 15
+  )) +
+  labs(
+    x = "offset",
+    y = "|estimate - var(z)| / var(z)",
+    title = " Task 4. Relative erroer of the three estimates vs var(Z)",
+    subtitle = "set.seed(1), n = 1e5, sd = 3"
+  ) +
+  theme_minimal() +
+  theme(legend.position = "top")
+```
+
+`var(x)` and two-pass stay accurate at every offset. The one-pass formula agrees only up to `1e4`. At `offset = 1e8`, it is already \~13% (`abs((7.864-9.063530) / 9.063530 * 100 %) ≈ 13.2 %`) off then collapse completely. Useful accuracy is lost at approximately `offset = 1e8`, because the one-pass formula subtracts two huge nearly-equal terms `sum(x**2)` and `sum(x)**2/n`, amplifying rounding errors.
+
+## Task 5
+
+- Mathematically: Var(X + a) = E[((X + a) - E[X + a])\^2] = E[(X - E[X])\^2] = Var(X). Adding a constant shifts the mean by the same amount, so the deviations from the mean are unchanged.
+- Numerically: the one-pass formula needs `sum(x**2)` and `sum(x)**2/n` separately. For large offset both are enormous
+
+## Task 6
+
+# Exercise 2 - A probability that disappears
+
+## Task 1
+
+```{r}
+# The x values given in the exercise
+x <- c(5, 8, 10, 20, 30, 40)
+
+# Task 1: Compute the upper-tail probability in the three ways
+m1 <- 1 - pnorm(x)
+m2 <- pnorm(x, lower.tail = FALSE)
+m3 <- pnorm(x, lower.tail = FALSE, log.p = TRUE)
+
+cbind(x, "1 - pnorm" = m1, "lower.tail=FALSE" = m2, "log.p = TRUE" = m3)
+```
+
+## Task 2
+
+It is already wrong at `x = 8` (`relative error = abs((6.220961e-16 - 6.661338e-16) / 6.661338e-16) \* 100% ≈ 6.6%`), and it becomes exactly `0` from `x = 10` onward. The reason: once `P(Z > x) <= ε / 2 ≈ 1.1e-16`, `pnorm(x)` rounds to exactly 1 in precision, so the subtraction returns 0.
+
+## Task 3
+
+This is cancellation. For large `x`, pnorm(x) is a number extremely close to 1, and double precision only stores ~16 significant digits relative to 1, numbers near 1 are spaced by ε ≈ 2.2e-16. The tail 1 - pnorm() is the tiny difference of two nearly equal numbers, so the subtraction destroys all the low-order digits that carried the answer. Once pnorm(x) rounds to 1, the results is exactly 0. pnorm(x) itself is computed accurately. The failure is in the subtraction step, not in the pnrom().
+
+## Task 4
+
+```{r}
+cbind(x, "log.p" = m3, "exp(log.p)" = exp(m3))
+```
+exp(log.p) works through x = 30 (4.9e-198 is still representable) but returns 0 at x = 40. log p = -804.6 < ln(min subnormal) = -744.44, so exp() underflows. In general the round-trip dies once .Note that log-probability itself stays accurate for all x. It is only the exp() conversion back to a plain double that fails. Working on the log scale extends the representable range by ~450 orders of magnitude.
+
+## Task 5
+
+```{r}
+p9 <- pnorm(9, lower.tail = FALSE)
+p9log <- pnorm(9, lower.tail = FALSE, log.p = TRUE)
+c(p = p9, log_p = p9log)
+
+# Figure
+df <- data.frame(
+  x = x,
+  true_k = -m3 / log(10),
+  k1 = ifelse(m1 > 0, -log10(m1), NA),
+  k2 = ifelse(m2 > 0, -log10(m2), NA)
+)
+
+ggplot(df, aes(x = x)) +
+  geom_line(aes(y = true_k), color = "black", linewidth = 1.2) +
+  geom_point(
+    aes(y = k1),
+    color = "darkorange",
+    shape = 16,
+    size = 2.5
+  ) +
+  geom_point(aes(y = k2),
+             color = "darkblue",
+             shape = 15,
+             size = 2.5) +
+  geom_hline(
+    yintercept = -log10(2.2e-308),
+    linetype = "dashed",
+    color = "black"
+  ) +
+  geom_hline(
+    yintercept = -log10(4.9e-324),
+    linetype = "dashed",
+    color = "darkred"
+  ) +
+  annotate(
+    "text",
+    x = 5.3,
+    y = 312,
+    label = "min normal double 2.2e-308",
+    color = "black",
+    size = 3
+  ) +
+  annotate(
+    "text",
+    x = 5.4,
+    y = 329,
+    label = "min subnormal 4.9e-324: plain p underflows to 0",
+    color = "darkred",
+    size = 3
+  ) +
+  annotate(
+    "text",
+    x = 10,
+    y = 12,
+    label = "1 - pnorm = 0",
+    color = "darkorange",
+    size = 3
+  ) +
+  annotate(
+    "text",
+    x = 20,
+    y = 12,
+    label = "1 - pnorm = 0",
+    color = "darkorange",
+    size = 3
+  ) +
+  annotate(
+    "text",
+    x = 30,
+    y = 12,
+    label = "1 - pnorm = 0",
+    color = "darkorange",
+    size = 3
+  ) +
+  annotate(
+    "text",
+    x = 40,
+    y = 12,
+    label = "1 - pnorm = 0",
+    color = "darkorange",
+    size = 3
+  ) +
+  annotate(
+    "text",
+    x = 40,
+    y = 12,
+    label = "1 - pnorm = 0",
+    color = "darkblue",
+    size = 3
+  ) +
+  scale_x_continuous(breaks = x) +
+  coord_cartesian(ylim = c(0, 355)) +
+  labs(x = "x", y = "-log10(returned upper-tail probability)", title = "Exercise 2 - a probability that disappear") +
+  theme_bw()
+```
+
+
+# Exercise 3 - Comparing two models without comparing their likelihoods
+
+## Task 1
+
+
+
+

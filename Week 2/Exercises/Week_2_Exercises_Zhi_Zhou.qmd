@@ -1,0 +1,200 @@
+---
+title: "Week 2 Exercises"
+author: "Zhi Zhou"
+date: "`r Sys.Date()`"
+format: html
+editor: visual
+---
+
+# Exercise 1
+
+## Task 1
+
+Set $u=F(x)$, i.e. $u=1-(x_0/x)^{\alpha}$, and solve for $x$:
+
+$(x_0/x)^\alpha=1/u\rightarrow x_0/x=(1-u)^{1/\alpha}\rightarrow x=\frac{x_0}{(1-u)^{1/\alpha}}$
+
+$\boxed{F^{-1}(u) = x_0\,(1-u)^{-1/\alpha} = \frac{x_0}{(1-u)^{1/\alpha}},\qquad 0<u<1}$
+
+## Task 2
+
+```{r}
+library(tidyverse)
+library(patchwork)
+
+rpareto_inv <- function(n, x0, al) {
+  # n i.i.d. uniform(0, 1)
+  u <- runif(n)
+  # apply the inverse cdf -> Pareto draws
+  x0 * (1 - u)^(-1 / al)
+}
+```
+
+## Task 3
+
+```{r}
+set.seed(20260812)
+n <- 5000
+x0 <- 2
+alpha3 <- 3
+x <- rpareto_inv(n, x0, alpha3)
+```
+
+## Task 4
+
+```{r}
+# theoretical density
+dpareto <- function(x, x0, al) {
+  ifelse(x >= x0, (al * x0^al) / (x^(al + 1)), 0)
+}
+
+# theoretical quantile
+qpareto <- function(p, x0, al) {
+  x0 * (1 - p) ^ (-1 / al)
+}
+
+# theoretical cdf
+ppareto <- function(x, x0, al) {
+  1 - (x0 / x)^al
+}
+
+# returns three panels side by side
+#   a) histogram + theoretical density
+#   b) Q-Q plot (sample quantiles vs theoretical quantile)
+#   c)empirical cdf vs theoretical cdf
+checks <- function(x, x0, al, tag) {
+  # plotting positions used to evaluate the theoretical quantiles
+  p <- (seq_along(x) - 0.5) / length(x)
+  
+  # one data frame for all panels
+  d <- data.frame(x = x,
+                  theoq = qpareto(p, x0, al),
+                  sampleq = sort(x))
+  
+  # axis cap: show the bulk of the data, hide the extreme 0.1% tail
+  xmax <- quantile(x, 0.999)
+  
+  # 
+  xs <- seq(x0, max(x), length.out = 400)
+  
+  # a) histogram + theoretical density
+  p1 <- ggplot(d, aes(x)) +
+    geom_histogram(
+      aes(y = after_stat(density)),
+      bins = 60,
+      fill = "steelblue",
+      alpha = 0.6,
+      color = "white"
+    ) +
+    geom_line(
+      data = data.frame(x = xs, y = dpareto(xs, x0, al)),
+      aes(x, y),
+      color = "darkred",
+      linewidth = 1
+    ) +
+    coord_cartesian(xlim = c(x0, xmax)) +
+    labs(
+      subtitle = paste("(a) histogram + density"),
+      x = "x",
+      y = "density"
+    ) +
+    theme_bw()
+  
+  # b) Q-Q plot
+  p2 <- ggplot(d, aes(theoq, sampleq)) +
+    geom_point(size = 0.6, color = "steelblue") +
+    geom_abline(
+      slope = 1,
+      intercept = 0,
+      color = "darkred",
+      linewidth = 1
+    ) +
+    labs(subtitle = paste("(b) Q-Q plot"),
+         x = "theorectical quantiles",
+         y = "sample quantiles") +
+    theme_bw()
+  
+  # empirical vs theoretical cdf
+  p3 <- ggplot(d, aes(x)) +
+    stat_ecdf(geom = "step",
+              color = "steelblue",
+              linewidth = 1) +
+    geom_line(
+      data = data.frame(x = xs, y = ppareto(xs, x0, al)),
+      aes(x, y),
+      color = "darkred",
+      linewidth = 1
+    ) +
+    coord_cartesian(xlim = c(x0, xmax)) +
+    labs(
+      subtitle = paste("(c) empirical vs theoretical cdf"),
+      x = "x",
+      y = "F(x)"
+    ) +
+    theme_bw()
+  
+  # combine the three panels side by side
+  wrap_plots(p1, p2, p3, ncol = 3) + plot_annotation(title = tag)
+}
+
+# produce and show the three diagnostic plots
+plt_alpha3 <- checks(x, x0, al = alpha3, "alpha = 3")
+plt_alpha3
+```
+
+## Task 5
+
+```{r}
+theomean3 <- alpha3 * x0 / (alpha3 - 1)
+c(
+  theoretical_mean = theomean3,
+  sample_mean = mean(x),
+  relative_diff = (mean(x) - theomean3) / theomean3
+)
+```
+
+## Task 6
+
+```{r}
+alpha12 <- 1.2
+set.seed(20260812)
+y <- rpareto_inv(n, x0, alpha12)
+theomean12 <- alpha12 * x0 / (alpha12 - 1)
+
+plt_alpha12 <- checks(x, x0, al = alpha12, "alpha = 1.2")
+plt_alpha12
+
+set.seed(123)
+reps <- 200
+mean3 <- replicate(reps, mean(rpareto_inv(n, x0, alpha3)))
+mean12 <- replicate(reps, mean(rpareto_inv(n, x0, alpha12)))
+c(alpha3_sd_of_means = sd(mean3),
+  alpha12_sd_of_means = sd(mean12))
+summary(mean12)
+
+stab <- data.frame(
+  mean = c(mean3, mean12),
+  alpha = factor(rep(c("alpha == 3", "alpha == 1.2"), each = reps))
+)
+
+plt_stab <- ggplot(stab, aes(mean)) +
+  geom_histogram(
+    bins = 40,
+    fill = "steelblue",
+    alpha = 0.8,
+    color = "white"
+  ) +
+  geom_vline(
+    data = data.frame(theo = c(3, 12), alpha = factor(c(
+      "alpha == 3", "alpha == 1.2"
+    ))),
+    aes(xintercept = theo),
+    color = "darkred",
+    linewidth = 1
+  ) +
+  facet_wrap( ~ alpha, scale = "free", labeller = label_parsed) +
+  labs(x = "sample mean (n = 5000)", y = "count", subtitl = "sample mean over 200 replications") +
+  theme_bw()
+plt_stab
+```
+
