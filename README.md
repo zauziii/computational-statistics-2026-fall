@@ -43,13 +43,13 @@ Master's Programme in Mathematics and Statistics, University of Helsinki.
 
 ### Lecture 2 — Numerical Linear Algebra
 - Why linear algebra is the core computational language of statistics.
-- Solve Ax = b directly with solve(A, b); avoid forming the explicit inverse.
-- Matrix norms and the condition number: σ_max / σ_min; well-conditioned vs ill-conditioned problems.
+- Solve $Ax = b$ directly with `solve(A, b)`; avoid forming the explicit inverse.
+- Matrix norms and the condition number: $σ_{max} / σ_{min}$; well-conditioned vs ill-conditioned problems.
 - Conditioning is a property of the problem; stability is a property of the algorithm.
 - Matrix decompositions: LU (with partial pivoting), Cholesky for symmetric positive-definite matrices, QR for least squares, and SVD / thin SVD for rank and near-singularity diagnostics.
-- Least squares: forming X^T X squares the condition number, which is why QR is preferred over the normal equations.
+- Least squares: forming $X^T X$ squares the condition number, which is why QR is preferred over the normal equations.
 - Multicollinearity: individual coefficients can be highly unstable while fitted values remain accurate.
-- Useful R functions: crossprod / tcrossprod, solve, qr.solve, chol, svd, kappa, norm.
+- Useful R functions: `crossprod` / `tcrossprod`, `solve`, `qr.solve`, `chol`, `svd`, `kappa`, `norm`.
 
 ---
 
