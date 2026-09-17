@@ -5,6 +5,26 @@ format: typst
 editor: visual
 ---
 
-This week, we covered permutation and randomization tests in Lecture 5, followed by the bootstrap and jackknife for idd data in Lecture 6. These methods use the data we have to help us make statistical inferences without replying on theoretical formulas. Permutation and randomization tests help us assess evidence against a null hypothesis, while the bootstrap and jackknife can help us estimate uncertainty or bias. What stood out to me was that we still need to think carefully about the assumption. Shuffling labels might seem straightforward, but it is only valid if those labels can be exchanged under the null hypothesis. Similarly, when we resample observations, we need to consider whether that procedure makes sense for the way the data were collected. For me, the main takeaway was that knowing what to shuffle or resample matters just as much as knowing how to run the code.
+This week, we studied permutation and randomization tests in Lecture 5, followed by the bootstrap and jackknife for idd data in Lecture 6. These methods allow us to make statistical inferences without relying only on theorectical formulas. Permutation and randomization tests are mainly used to test null hypothesis, while bootstrap and jackknife methods help estimate uncertainty and bias.
 
-In the permutation lecture, the central idea was that under a "no difference" null, certain labels or observations are interchangeable, so any valid rearrangement of the data should be just as plausible as what we actually observed. The
+The biggest lesson for me was that assumptions still matter. Shuffling labels may look simple, but it is only valid when the labels are exchangeable under the null hypothesis. In the same way, resampling observations only makes sense when the resampling method matches how the data were collected. Knowing what we are allowed to shuffle or resample is just as important as knowing how to write the code.
+
+The basic idea of a permutation test is quite simple. Under a null hypothesis of no difference, certain labels or observations can be treated as interchangeable. This means that any valid rearrangement should be just as reasonable as the arrangement we observed. The permutation p-value is the proportion of rearrangements that produce a test statistic at least as extreme as the observed one.
+
+We discussed exact permutation tests, large-sample approximations, and Monte Carlo methods. We also looked at two-sample location problems, Wilcoxon rank-sum tests, Kruskal-Wallis tests, Spearman correlation, and tests of independence where one variable is shuffled relative to another.
+
+One important thing was that "distribution-free" does not mean "assumption-free". Even if the shunffling method is correct, the test statistic may fail to detect the type of relationship we care about. For example, Pearson and Spearman correlations may both missing a strong U-shaped relationship because neither is designed to detect that pattern.
+
+The bootstrap approaches inference from a different direction. Instead of working under a null hypothesis, we treat the observed data as an estimate of the population and draw new samples from it. In a non parametric bootstrap, we repeatedly sample with replacement from the observed values. This also lead to the well-know 0.632 result: on average, a bootstrap sample contains about 63% of the original observations at least once.
+
+After generating many bootstrap samples, we can use the resulting estimates to calculate a standard error, estimate bias, or construct confidence intervals. We discussed normal, percentile, and basic bootstrap confidence intervals.
+
+However, the bootstrap also has assumptions. It usually requires i.i.d exchangeable observations, a reasonably smooth statistic, and a resampling method that reflects the real sampling process. An example of bootstrap failure was estimating the upper limit of a uniform distribution using the same maximum. Because the empirical distribution contains no values above the largest observed value, bootstrap samples can never produce a large maximum. As a result, the bootstrap underestimates the true uncertainty.
+
+The jackknife is another resampling method. It leaves out one observation at a time and recalculates the estimate. It is deterministic and often faster than the bootstrap. You can use it to estimate
+
+It can be used to estimate standard errors and bias, and it can also help identify influential observations.
+
+The main connection between the two lectures is that we should not trust resampling results without thinking about what the methods assumes. In a permutation test, the null hypothesis tells us what can be shuffled. In the bootstrap, the way the data were generated tells us what should be resampled. The choice of test statistics also matter because it determines what kinds of differences or relationships the method can detect.
+
+The easiest part of the week was the actual computation. Once the ideas of "shuffle under the null" and "sample with replacement" become clear, the R code felt quite straight forward. The harder part was recognizing possible problems before running the analysis. Are the observations really exchangeable? Does the resampling method match the study design? Is the statistic suitable for the effect we want to find?
