@@ -1,0 +1,28 @@
+---
+title: "MAST32001 Week 3 Summary"
+author: "Zhi Zhou"
+format: typst
+editor: visual
+---
+
+This week, Lecture 5 covered permutation and randomization tests. Lecture 6 covered the bootstrap and jackknife for independent and identically distributed (iid) data. These methods let us make statistical inferences without relying only one theoretical formulas. Permutation and randomization tests help us test null hypotheses. The bootstrap and jackknife help us estimate uncertainty and bias.
+
+The lesson for was that resampling still depends on assumptions. We need to understand how the data were collected before choosing what to shuffle or resample.
+
+The bootstrap starts with the observed data. We use their distribution an estimate of the population distribution. In a non parametric bootstrap, we draw samples with replacement from these data. Each sample has the same size as the original sample. Some observations appear several times, and others do not appear at all. For large samples, each bootstrap sample include about 63% of the original observations at least once, on average. This is well-known 0.632 result.
+
+We calculate the estimate again for each bootstrap sample. The results show how much the estimate varies across samples. We can use them to estimates standard errors and bias or to build confidence intervals. We covered normal, percentile, and basic bootstrap confidence intervals.
+
+The standard bootstrap for iid data assumes that observations are independent and come from the same distribution. Other study designs may need different resampling methods. The choice of statistic also affects whether the bootstrap works well.
+
+One example showed a problem with using the sample maximum to estimate the upper limit of a uniform distribution. A bootstrap sample cannot contain a value above the largest observed value. Its maximum can only equal or fall below the original maximum. This means that the bootstrap does not correctly capture the uncertainty is estimating the upper limit.
+
+The jackknife also uses the observed data to estimate uncertainty. It removes one observation at a time and calculates the estimate again. The method uses no random sampling, so repeating it on the same data gives the same results. It can be faster than a bootstrap with many repeated samples. We can use it to estimate standard errors and bias. We can also check which observations have a large effect on the estimate.
+
+Permutation test focus on a different question: how unusual is the observed result under the null hypothesis? The null hypothesis determines which labels or observations we can treat as interchangeable. A valid permutation test uses rearrangements that are equally likely under that null. We calculate the test statistics for each rearrangement and compare it with the observed statistic. The permutation p-value is the proportion of valid rearrangements that give a result at least as extreme as the observed one.
+
+We discussed exact permutation tests, large-sample approximations, and Monte Carlo methods. Our examples included two-sample location tests, Wilcoxon rank-sum tests, and Kruskal-Wallis tests. We also studies Spearman correlation and tests of independence. In an independence test, we can shuffle one variable relative to another when the assumptions allow it.
+
+The choice of test statistic matters even when the shuffling is valid. A distribution-free test sill has assumptions, and it may miss some patterns. For instance, Pearson and Spearman correlations can both miss a strong U-shaped relationship. Pearson correlation measures linear association, and Spearman measures whether values tend to increase or decrease. Neither is designed to detect a U-shaped pattern.
+
+The computation is easy. he R code made sense once I understood shuffle under the null and sample with replacement. Finding possible problems before running the analysis is the harder part I would think
