@@ -1,6 +1,7 @@
 ---
 title: "MAST32001 Week 3 Summary"
 author: "Zhi Zhou"
+date: today
 format: typst
 editor: visual
 ---
@@ -23,6 +24,6 @@ Permutation test focus on a different question: how unusual is the observed resu
 
 We discussed exact permutation tests, large-sample approximations, and Monte Carlo methods. Our examples included two-sample location tests, Wilcoxon rank-sum tests, and Kruskal-Wallis tests. We also studies Spearman correlation and tests of independence. In an independence test, we can shuffle one variable relative to another when the assumptions allow it.
 
-The choice of test statistic matters even when the shuffling is valid. A distribution-free test sill has assumptions, and it may miss some patterns. For instance, Pearson and Spearman correlations can both miss a strong U-shaped relationship. Pearson correlation measures linear association, and Spearman measures whether values tend to increase or decrease. Neither is designed to detect a U-shaped pattern.
+Even when the shuffling is valid, the choice of test statistics is important. Distribution-free is not totally free. It still has assumption. For example, Pearson and Spearman cannot detect the U-shaped relationship.
 
-The computation is easy. he R code made sense once I understood shuffle under the null and sample with replacement. Finding possible problems before running the analysis is the harder part I would think
+The computation is easy. The R code made sense once we understood shuffle under the null and sample with replacement. Finding possible problems before running the analysis is the hardest part. Like, are the observations exchangeable? Is the statistics right for the effect we want to detect?
