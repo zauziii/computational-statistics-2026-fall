@@ -1,0 +1,22 @@
+---
+title: "MAST32001 Week 5 Summary"
+author: "Zhi Zhou"
+date: today
+format:
+  pdf:
+    documentclass: article
+    papersize: a4
+    fontsize: 11pt
+    geometry: margin=2.5cm
+    linestretch: 1.15
+---
+
+This week was about Bayesian statistics. The basic idea is simple. We start with a prior, which describes what we think before seeing data. Then we combine it with the likelihood, which tells us how well different parameter values fit the data. This gives the posterior. That is:$posterior \propto prior \times likelihood.$We also discussed the marginal likelihood, which makes the posterior a proper probability distribution, though it can be difficult to compute.
+
+We also practiced building likelihoods ourselves. The steps were quite similar in each example. We chose a sampling mode, wrote the density for one observation, and then multiplied over all observations. After that, we can omit terms that do not contain the parameter. We did this with normal and Poisson data. These examples also showed how conjugate priors work. For example, a normal prior with normal data gives a normal posterior, and a Gamma prior with Poisson data gives a Gamma posterior. I found it useful to see the posterior mean usually lies between the prior mean and the sample mean, depending on how much information each one gives.
+
+The next topic was Markov Chain Monte Carlo (MCMC). We need it when the posterior is too difficult to calculate or sample from directly. The idea is to create a chain of dependent draws that represents the posterior after running for long enough. We learned some basic Markov chain idea, such as stationarity, detailed balance, irreducibility, aperiodicity, and autocorrelation. Autocorrelation means that nearby draws can be very similar, so the number of useful draws can be much smaller than the total number of iterations.
+
+The main algorithm was Metropolis-Hastings. We propose a new value and decide whether to accept it. If the proposal is rejected, the chain stays at the current value. One useful point is that the normalizing constant cancels in the acceptance ratio, so we do not need to calculate it directly. We also used the log scale to avoid numerical problems. We tested the algorithm in R using Poisson-Gamma example, for which the exact posterior was known. This made it easier to see whether the sampler was working. We also saw that proposal step that is too small or too large can both cause poor mixing.
+
+We also used the same method for Bayesian linear regression. We worked with an intercept, a slope, and an error standard deviation. We also centered the predictor in the cars data, which made the intercept and slope less strongly related and helped the sampler move more easily. At the end, we learned how to check the results using trace plots, R-hat, effective sample size, and Monte Carlo Standard error. The easiest part for me was building the likelihood function because the same steps recurred. The convergence theory is the hardest for me since I kept mixing up the conditions for the different types of convergence.
