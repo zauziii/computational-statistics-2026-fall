@@ -1,0 +1,341 @@
+---
+title: "MAST32001 Computational Statistics"
+Subtitle: "Exercise 5 – Markov chains and MCMC"
+author: "Zhi Zhou"
+date: today
+format:
+  pdf:
+    code-overflow: wrap
+    embed-resources: true
+    fig-cap-location: bottom
+    fontsize: 11pt
+    geometry: margin=1in
+    latex_engine: xelatex
+    number-sections: false
+    include-in-header:
+      text: |
+        \usepackage{amsmath, amssymb}
+        \usepackage{setspace}
+        \setstretch{1.25}
+---
+
+# Exercise 1: A Markov chain with circulation
+
+Consider $$P=\begin{pmatrix} 0.20 & 0.65 & 0.10 & 0.05 \\ 0.05 & 0.20 & 0.65 & 0.10 \\ 0.10 & 0.05 & 0.20 & 0.65 \\ 0.65 & 0.10 & 0.05 & 0.20 \end{pmatrix}
+$$
+
+```{r}
+P_raw <- matrix(
+  c(
+    0.20, 0.65, 0.10, 0.10, 0.05,
+    0.05, 0.20, 0.65, 0.10, 0.10,
+    0.10, 0.05, 0.20, 0.65, 0.10,
+    0.10, 0.10, 0.05, 0.20, 0.65,
+    0.65, 0.10, 0.10, 0.05, 0.20
+  ),
+  nrow = 5,
+  byrow = TRUE
+)
+rowSums(P_raw)
+```
+
+Each row of the printed matrix sums to 1.1, so it is not a valid transition matrix as written. The natural propositional correction is to divide every entry by 1.1. The resulting stochastic matrix is
+
+```{r}
+# normalize each row by its row sum
+P <- sweep(P_raw, 1, rowSums(P_raw), FUN = "/")
+P
+```
+
+## Task 1
+
+Find a stationary distribution $\pi$, and explain how you obtained it.
+
+**Answer:**
+
+Let's check whether the resulting matrix is circulant and doubly stochastic. A matrix is circulant if each row is a cyclic right shift of the first row. It is doubly stochastic if every row sum and every column sum equals 1. Based on these definitions, I wrote two helper functions.
+
+```{r}
+# Check the circulant structure: each row is a cyclic right shift of the first row.
+is_circulant <- function(P, tol = 1e-10) {
+  if (!is.matrix(P) || nrow(P) != ncol(P)) {
+    return(FALSE)
+  }
+  
+  n <- nrow(P)
+  
+  right_shift <- function(x, k) {
+    if (k == 0) {
+      x
+    } else {
+      c(tail(x, k), head(x, -k))
+    }
+  }
+  
+  for (i in seq_len(n)) {
+    expected <- right_shift(P[1, ], i - 1)
+    if (!isTRUE(all.equal(P[i, ], expected, tolerance = tol))) {
+      return(FALSE)
+    }
+  }
+  
+  TRUE
+}
+
+# Check whether P is doubly stochastic: all rows and all columns sum to 1.
+is_doubly_stochastic <- function(P, tol = 1e-12) {
+  if (!is.matrix(P) || nrow(P) != ncol(P)) {
+    return(FALSE)
+  }
+  
+  rows_ok <- all(abs(rowSums(P) - 1) < tol)
+  columns_ok <- all(abs(colSums(P) - 1) < tol)
+  
+  rows_ok && columns_ok
+}
+```
+
+Now, let's check the resulting matrix.
+
+```{r}
+#| results: hold
+cat("P_raw is circulant:", is_circulant(P_raw), "\n")
+cat("P is circulant:", is_circulant(P), "\n")
+stopifnot(is_circulant(P))
+
+cat("P_raw is doubly stochastic:",
+    is_doubly_stochastic(P_raw),
+    "\n")
+cat("P is doubly stochastic:", is_doubly_stochastic(P), "\n")
+stopifnot(is_doubly_stochastic(P))
+```
+
+As shown above, the normalized matrix $P$ is circulant and doubly stochastic. Therefore, the uniform distribution is stationary.
+
+```{r}
+pi <- rep(1 / ncol(P), ncol(P))
+pi
+```
+
+Let’s verify this. To check whether a proposed distribution $\pi$ is stationary, we need to verify the three defining properties:
+
+1. Every element is nonnegative: $\pi_i \ge 0.$
+2. The elments sum to 1: $\sum_i \pi_i=1.$
+3. The stationary equation holds: $\pi P=\pi$
+
+```{r}
+is_stationary <- function(pi, P, tol = 1e-12) {
+  nonnegative <- all(pi >= 0)
+  sums_to_one <- abs(sum(pi) - 1) < tol
+  stationary_equation <- all(abs(as.numeric(pi %*% P) - pi) < tol)
+  
+  nonnegative && sums_to_one && stationary_equation
+}
+
+is_stationary(pi, P)
+```
+
+
+
+## Task 2
+
+Is the chain reversible with respect to $\pi$?
+
+**Answer:**
+
+Reversibility requires detailed balance:
+$$\pi_i P_{ij}=\pi_j P_{ji}.$$
+
+```{r}
+# entry (i,j) is pi_i * P_ij
+forward_flow <- sweep(P, 1, pi, FUN = "*")
+
+# check whether forward_flow equals its transpose
+reversible <- max(abs(forward_flow - t(forward_flow))) < 1e-12
+
+reversible
+```
+For state 1 and 2:
+
+```{r}
+c(pi[1] * P[1, 2], pi[2] * P[2, 1])
+```
+
+These are unequal, so the chain is not reversible.
+
+## Task 3
+
+Is it irreducible and aperiodic? Justify both answers.
+
+**Answer:**
+
+By definition, a Markov chain is irreducible if every state can be reached from every other state.
+
+```{r}
+all(P > 0)
+```
+In the matrix, rows represent the current state and columns represent the next state. The condition `all(P > 0)` means that every entry $P_{ij}$ is positive. Therefore from any state $i$, the chain can move directly to any other state $j$ in one step. Since all states can reach one another, the chain is irreducible.
+
+The period of a state is the greatest common divisor of all possible return times to that state, and a state is aperiodic if its period is 1.
+
+```{r}
+all(diag(P) > 0)
+```
+
+The diagonal entries $P_{ii}$ are the probabilities that the chain stays in the same state for one step. If `all(diag(P) > 0)` is ture, then every state has a positive self-loop. Thus, the chain can return the same state in one step. Since one possible return time is 1, the greatest common divisor of all return times is 1, so every state is aperiodic.
+
+## Task 4
+
+Starting from state 1, simulate 10,000 steps in `R` and compare empirical state frequencies with $\pi$.
+
+**Answer:**
+
+For$$h(x)=I(x \in {1,2}),$$ the running average after m steps is$$\bar{h}_m=\frac{1}{m}\sum_{t=1}{m}h(X_t).$$
+Its theorectical limiting is$$\text{lim}_{m\rightarrow \infty}\bar{h}_m=\mathbb{E}\big[h(X)\big]=\sum_{x=1}^{5}h(x)\pi_x=\pi_1+\pi_2.$$
+Since the stationary is uniform,
+so$$\boxed{\text{lim}_{m\rightarrow \infty}\bar{h}_m=0.40}$$
+
+```{r}
+set.seed(1002)
+n_steps <- 10000
+current <- 1
+x <- integer(n_steps)
+
+for (m in seq_len(n_steps)) {
+  current <- sample.int(5, size = 1, prob = P[current, ])
+  x[m] <- current
+}
+
+empirical <- prop.table(table(factor(x, levels = 1:5)))
+comparison <- rbind(empirical = as.numeric(empirical), stationary = pi)
+colnames(comparison) <- paste0("state ", 1:5)
+print(round(comparison, 4))
+```
+Starting from state 1, I simulated 10,000 transitions using the transition probabilities in $P$. The empirical frequencies of the five states were all close to 0.2, which agrees with the stationary distribution.
+
+This is expected because the chain is irreducible and aperiodic, so the ergodic theorem guarantees that the empirical state frequencies coverage to the stationary distribution as the number of steps increases.
+
+## Task 5
+
+For $h(x) = I(x\in \{1,2\}$, plot the running average $$\frac{1}{m}\sum_{t=1}^mh(X_t),\qquad m=1,...,10000,$$
+and add its theoretical limiting value. Interpret the plot.
+
+**Answer:**
+
+```{r}
+#| warning: false
+library(ggplot2)
+library(ggpubr)
+
+h <- as.numeric(x %in% c(1, 2))
+running_average <- cumsum(h) / seq_len(n_steps)
+theoretical_limit <- sum(pi[c(1, 2)])
+
+plot_df <- data.frame(m = seq_len(n_steps), running_average = running_average)
+
+ggplot(plot_df, aes(x = m, y = running_average)) +
+  geom_line(aes(colour = "Running average"), linewidth = 0.6) +
+  geom_hline(
+    aes(yintercept = theoretical_limit, colour = "Theoretical limit"),
+    linetype = "dashed",
+    linewidth = 0.6
+  ) +
+  annotate(
+    "text",
+    x = n_steps * 0.99,
+    y = theoretical_limit + 0.035,
+    label = sprintf("%.2f", theoretical_limit),
+    hjust = 1,
+    vjust = 0,
+    colour = "tomato",
+    size = 3.2
+  ) +
+  scale_colour_manual(
+    name = NULL,
+    values = c(
+      "Running average" = "steelblue",
+      "Theoretical limit" = "tomato"
+    ),
+    labels = c("Running average", "Theoretical limit = 0.40")
+  ) +
+  scale_x_continuous(expand = expansion(mult = c(0.01, 0.01))) +
+  scale_y_continuous(limits = c(0, 1), expand = expansion(mult = c(0, 0))) +
+  labs(
+    x = "m",
+    y = expression(bar(h)[m]),
+    title = expression("Running average of" ~
+                         h(X[t]) ==
+                         plain(I)(X[t] %in% group("{", list(
+                           1, 2
+                         ), "}")))
+  ) +
+  theme_pubr(base_size = 11, border = TRUE) +
+  theme(
+    plot.title = element_text(
+      size = 11,
+      face = "plain",
+      hjust = 0.5,
+      margin = margin(b = 6)
+    ),
+    axis.text = element_text(colour = "black", size = 10),
+    axis.title = element_text(size = 11),
+    axis.ticks = element_line(colour = "black", linewidth = 0.3),
+    panel.grid = element_blank(),
+    legend.position = c(0.70, 0.88),
+    legend.background = element_blank(),
+    legend.key = element_blank(),
+    legend.text = element_text(size = 10),
+    plot.margin = margin(10, 12, 8, 8)
+  )
+```
+The running average shows random variation during the first few steps, but it gradually stabilizes near the theoretical limiting value 0.40. This follows from the ergodic theorem because the chain is irreducible and aperiodic. As m increases, the effect of the initial state disappears, and the proportion of time spent in states 1 and 2 converges to their total stationary probability.
+
+
+# Exercise 2: Metropolis–Hastings on a transformed scale
+
+## Task 1
+
+## Task 2
+
+## Task 3
+
+## Task 4 
+
+## Task 5
+
+# Exercise 3: Diagnose and repair a sampler
+
+## Task 1
+
+## Task 2
+
+## Task 3
+
+## Task 4 
+
+## Task 5
+
+# Exercise 4: Multimodality
+
+## Task 1
+
+## Task 2
+
+## Task 3
+
+## Task 4 
+
+## Task 5
+
+# Exercise 5: MCMC as numerical integration
+
+## Task 1
+
+## Task 2
+
+## Task 3
+
+## Task 4 
+
+## Task 5
+
