@@ -19,6 +19,7 @@ format:
         \setstretch{1.25}
 ---
 
+
 # Exercise 1: A Markov chain with circulation
 
 Consider $$P=\begin{pmatrix} 0.20 & 0.65 & 0.10 & 0.05 \\ 0.05 & 0.20 & 0.65 & 0.10 \\ 0.10 & 0.05 & 0.20 & 0.65 \\ 0.65 & 0.10 & 0.05 & 0.20 \end{pmatrix}
@@ -224,7 +225,7 @@ and add its theoretical limiting value. Interpret the plot.
 
 ```{r}
 #| warning: false
-library(ggplot2)
+library(tidyverse)
 library(ggpubr)
 
 h <- as.numeric(x %in% c(1, 2))
@@ -293,49 +294,1410 @@ The running average shows random variation during the first few steps, but it gr
 
 # Exercise 2: Metropolis–Hastings on a transformed scale
 
+Suppose $$Y|p\sim Binomial(40,p),\qquad Y=31$$
+Define $$\eta=log(\frac{p}{1-p})$$
+and assume directly that $$\eta\sim N(0,2^2).$$
+
 ## Task 1
+
+Derive the log posterior of $\eta$, up to an additive constant.
+
+**Answer:**
+
+The likelihood is $$Y|p\sim Binomial(40,p),\qquad Y=31$$
+so, up to constants,$$f(y|p)\propto p^{31}(1-p)^9.$$
+With
+$$\eta=log(\frac{p}{1-p}),\qquad p=\frac{e^{\eta}}{1+e^{\eta}},\qquad 1-p=\frac{1}{1+e^{\eta}},$$
+the likelihood becomes $$f(y|p)\propto (\frac{e^{\eta}}{1+e^{\eta}})^{31}(\frac{1}{1+e^{\eta}})^9=\frac{e^{31\eta}}{(1+e^{\eta})^{40}}.$$
+The prior is $$\eta\sim N(0,2^2),$$
+with log-density
+$$logf(\eta)=-\frac{\eta^2}{8}+C.$$
+Because the prior is specified directly on $\eta$, no Jacobian is needed. Therefore,$$f(y|p)\propto \text{exp}\big(31\eta-40\text{log}(1+e^{\eta})-\frac{\eta^2}{8},$$
+and the log posterior, up to an additive constant, is$$\boxed{\text{log}f(y|p)\propto 31\eta-40\text{log}(1+e^{\eta})-\frac{\eta^2}{8}+C.}$$
+
+```{r}
+# numerically stable computation of log(1 + exp(x))
+# direct computation of exp(x) can overflow when x is very large.
+log1pexp <- function(x) {
+  ifelse(
+    x > 0,
+    x + log1p(exp(-x)),
+    # when x > 0, use log(1+e^x) = x + log(1+e^{-x})
+    log1p(exp(x))        # when x <= 0, compute log(1+e^x) directly
+  )
+}
+
+# unnormalized log posterior of eta
+# additive constants do not need to be included because they cancel
+# in the Metropolis-Hastings acceptance ratio.
+logpost <- function(eta) {
+  31 * eta -
+    40 * log1pexp(eta) -
+    eta^2 / (2 * 2^2)
+}
+```
 
 ## Task 2
 
+Implement random-walk Metropolis with $$\eta^*=\eta^{(t)}+\epsilon,\qquad \epsilon\sim N(0,s^2).$$
+
+**Answer:**
+
+For a random-walk proposal, $$\eta^*=\eta^{(t)}+\epsilon,\qquad \epsilon\sim N(0,s^2).$$
+The forward proposal density is 
+$$q(\eta^*\mid\eta)=\phi_s(\eta^*-\eta),$$
+whereas the density of the reverse move is
+$$q(\eta\mid\eta^*)=\phi_s(\eta-\eta^*).$$
+since
+$$\eta^*-\eta=\varepsilon,
+\qquad
+\eta-\eta^*=-\varepsilon,$$
+and the zero-centered normal density is symmetric,
+$$\phi_s(\varepsilon)=\phi_s(-\varepsilon).$$
+Consequently,
+$$q(\eta^*\mid\eta)=q(\eta\mid\eta^*),$$
+so the proposal-density terms cancel in the Metropolis-Hastings ratio. The acceptance probability therefore depends on only the posterior ratio:
+
+$$\alpha(\eta,\eta^*)
+=
+\min\left\{
+1,\frac{f(\eta^*\mid y)}{f(\eta\mid y)}
+\right\}.$$
+Equivalently, on the log scale,
+$$\boxed{
+\alpha(\eta,\eta^*)
+=
+\min\left\{
+1,\exp\left[
+\log f(\eta^*\mid y)-\log f(\eta\mid y)
+\right]
+\right\}.
+}$$
+The posterior normalizing constant may be omiited because it cancels in this ratio.
+
+```{r}
+# random-walk metropolis algorithm
+rw_metropolis <- function(n_iter,
+                          init = 0,
+                          s = 1,
+                          burn_in = 0,
+                          seed = 1) {
+  # Check that the total number of iterations is valid
+  if (n_iter < 1) {
+    stop("n_iter must be at least 1.")
+  }
+  
+  # Check that burn-in does not include all iterations
+  if (burn_in < 0 || burn_in >= n_iter) {
+    stop("burn_in must be between 0 and n_iter - 1.")
+  }
+  
+  # set the random seed for reproducibility
+  set.seed(seed)
+  
+  # preallocate a vector to store eta at each iteration
+  eta_chain <- numeric(n_iter)
+  
+  # initialize the current parameter value
+  current <- init
+  
+  # compute the log posterior at the current value
+  current_logpost <- logpost(current)
+  
+  # count how many proposals are accepted
+  n_accepted <- 0
+  
+  # start the mcmc iterations
+  for (i in seq_len(n_iter)) {
+    # generate a random-walk proposal:
+    # proposal = current + epsilon, where epsilon ~ N(0, s^2)
+    proposal <- current + rnorm(1, mean = 0, sd = s)
+    
+    # compute the log posterior at the proposed value
+    proposal_logpost <- logpost(proposal)
+    
+    # computed the log acceptance ratio.
+    # the random-walk proposal is symmetric, so no proposal-density ratio is needed.
+    log_acceptance_ratio <- proposal_logpost - current_logpost
+    
+    # draw a uniform number and make acceptance decision on the log scale.
+    if (log(runif(1)) < log_acceptance_ratio) {
+      # if accepted, update the current parameter value
+      current <- proposal
+      
+      # update the log posterior associated with the current value
+      current_logpost <- proposal_logpost
+      
+      # increase the acceptance counter
+      n_accepted <- n_accepted + 1
+    }
+    
+    # store the current value, whether the proposal was accepted or rejected
+    eta_chain[i] <- current
+  }
+  
+  # Remove the burn-in iterations and retain the remaining draws
+  eta_retained <- eta_chain[(burn_in + 1):n_iter]
+  
+  # Return the full chain, retained draws, and sampler information
+  list(
+    chain = eta_chain,
+    retained = eta_retained,
+    acceptance_rate = n_accepted / n_iter,
+    burn_in = burn_in,
+    n_retained = length(eta_retained)
+  )
+}
+```
+
+
 ## Task 3
+
+Run 20,000 iterations with $s=1$, starting at zero, and discard the first 2,000.
+
+**Answer:**
+
+```{r}
+rw_result <- rw_metropolis(
+  n_iter = 20000,
+  init = 0,
+  s = 1,
+  burn_in = 2000,
+  seed = 10040203
+)
+
+rw_result$burn_in
+rw_result$n_retained
+rw_result$acceptance_rate
+
+c(mean_eta = mean(rw_result$retained),
+  sd_eta = sd(rw_result$retained))
+
+# trace plot
+trace_df <- data.frame(
+  iteration = seq_len(length(rw_result$chain)),
+  eta = rw_result$chain,
+  phase = factor(rep(
+    c("Burn-in", "Retained"), c(rw_result$burn_in, rw_result$n_retained)
+  ), levels = c("Burn-in", "Retained"))
+)
+
+ggplot(trace_df, aes(x = iteration, y = eta, colour = phase)) +
+  geom_line(linewidth = 0.25) +
+  geom_vline(
+    xintercept = rw_result$burn_in,
+    colour = "tomato",
+    linetype = "dashed",
+    linewidth = 0.6
+  ) +
+  annotate(
+    "text",
+    x = rw_result$burn_in + 300,
+    y = max(trace_df$eta),
+    label = "End of burn-in",
+    hjust = 0,
+    vjust = 1.2,
+    size = 3,
+    colour = "tomato"
+  ) +
+  scale_colour_manual(name = NULL,
+                      values = c("Burn-in" = "grey70", "Retained" = "steelblue")) +
+  labs(x = "Iteration", y = expression(eta), title = "Random-walk Metropolis trace") +
+  theme_pubr(base_size = 11, border = TRUE) +
+  theme(
+    plot.title = element_text(size = 11, hjust = 0.5),
+    legend.position = c(0.88, 0.88),
+    legend.background = element_blank(),
+    legend.key = element_blank()
+  )
+```
+
 
 ## Task 4 
 
+Transform the retained draws to $p$ and estimate $E(p|y)$ and $P(p>0.75|y)$.
+
+**Answer:**
+
+```{r}
+# transform
+p_post <- plogis(rw_result$retained)
+# estimate E(p|y)
+mean_p <- mean(p_post)
+mean_p
+# estimate P(p>0.75|y)
+prob_p_gt_0.75 <- mean(p_post > 0.75)
+prob_p_gt_0.75
+
+# plot p_post
+p_df <- data.frame(p = p_post)
+
+ggplot(p_df, aes(x = p)) +
+  geom_histogram(
+    aes(y = after_stat(density)),
+    bins = 40,
+    fill = "grey85",
+    colour = "white",
+    linewidth = 0.2
+  ) +
+  geom_density(colour = "steelblue", linewidth = 0.6) +
+  geom_vline(
+    xintercept = 0.75,
+    colour = "tomato",
+    linetype = "dashed",
+    linewidth = 0.6
+  ) +
+  annotate(
+    "text",
+    x = 0.68,
+    y = Inf,
+    label = "0.75",
+    hjust = 0,
+    vjust = 1.3,
+    size = 3.2,
+    colour = "tomato"
+  ) +
+  geom_vline(xintercept = mean_p,
+             colour = "steelblue",
+             linewidth = 0.6) +
+  scale_x_continuous(limits = c(0, 1)) +
+  labs(x = "p",
+       y = "Density",
+       title = expression("Posterior of" ~ p)) +
+  theme_pubr(base_size = 11, border = TRUE)
+```
+
+
 ## Task 5
+
+Explain why the logit scale is convenient compared with a Gaussian random walk directly on $p$.
+
+**Answer:**
+
+```{r}
+set.seed(10040205)
+
+n_proposals <- 100000
+eta_current <- 1.2
+p_current <- plogis(eta_current)
+s <- 0.1
+
+# gaussian random walk directly on eta
+eta_proposals <- eta_current + rnorm(n_proposals, mean = 0, sd = s)
+p_from_logit <- plogis(eta_proposals)
+
+# gaussian random walk directly on p
+p_proposals <- p_current + rnorm(n_proposals, mean = 0, sd = s)
+
+# check whether proposed probabilities are outside [0,1]
+invalid_p <- p_proposals <= 0 | p_proposals >= 1
+invalid_logit <- p_from_logit <= 0 | p_from_logit >= 1
+
+result <- c(
+  current_p = p_current,
+  invalid_p_scale = mean(invalid_p),
+  invalid_logit_scale = mean(invalid_logit)
+)
+
+print(round(result, 4))
+```
+
+This means: on the **$p$-scale**, even with a relatively small proposal standard deviation $s=0.1$, about 1% of the proposals are invalid because they fall outside $(0,1)$; on the **logit scale**, none of the proposals are invalid. The logistic transformation always maps a finite value of $\eta$ into $(0,1)$.
+
+The transformation also works for extreme proposals:
+
+```{r}
+plogis(c(-100, 100))
+```
+Approximately 0 and 1, but still strictly within $(0,1)$.
+
 
 # Exercise 3: Diagnose and repair a sampler
 
+The target is $N(0, 22)$. Use the following sampler.
+
+```{r}
+log_target <- function(x)
+  dnorm(x, 0, 2, log = TRUE)
+rw_normal <- function(initial, n_iter, proposal_sd) {
+  x <- numeric(n_iter)
+  x[1] <- initial
+  acc <- 0
+  for (i in 2:n_iter) {
+    2
+    prop <- rnorm(1, x[i - 1], proposal_sd)
+    if (log(runif(1)) <
+        log_target(prop) - log_target(x[i - 1])) {
+      x[i] <- prop
+      acc <- acc + 1
+    } else
+      x[i] <- x[i - 1]
+  }
+  list(draws = x, acceptance = acc / (n_iter - 1))
+}
+```
+
 ## Task 1
+
+Run four chains of length 2,000 from −12,−4, 4, 12 using `proposal_sd = 0.03`.
+
+**Answer:**
+
+```{r}
+set.seed(10040301)
+
+starts <- c(-12, -4, 4, 12)
+
+original_chains <- lapply(starts, function(initial) {
+  rw_normal(initial = initial,
+            n_iter = 2000,
+            proposal_sd = 0.03)
+})
+
+# extract the draws and acceptance rates
+original_draws <- do.call(rbind, lapply(original_chains, function(fit)
+  fit$draws))
+
+original_acceptance <- sapply(original_chains, function(fit)
+  fit$acceptance)
+
+data.frame(
+  start = starts,
+  acceptance = round(original_acceptance, 3),
+  final_value = original_draws[, 2000]
+)
+```
+The acceptance rates are very high, but the chains remain close to their initial values, which already suggests poor exploration.
 
 ## Task 2
 
+Produce suitable diagnostic plots and numerical summaries. Decide yourself what is useful.
+
+**Answer:**
+
+```{r}
+# prepare the trace data
+trace_df <- do.call(rbind, lapply(seq_along(starts), function(i) {
+  data.frame(
+    iteration = 1:2000,
+    x = original_chains[[i]]$draws,
+    start = factor(starts[i])
+  )
+}))
+
+# trace plot
+p_trace <- ggplot(trace_df, aes(x = iteration, y = x, colour = start)) +
+  annotate(
+    "rect",
+    xmin = -Inf,
+    xmax = Inf,
+    ymin = -2,
+    ymax = 2,
+    fill = "black",
+    alpha = 0.06
+  ) +
+  geom_hline(
+    yintercept = 0,
+    colour = "black",
+    linetype = "dotted",
+    linewidth = 0.3
+  ) +
+  geom_line(linewidth = 0.5) +
+  scale_colour_manual(name = "Initial value",
+                      values = c("springgreen4", "tan2", "steelblue", "tomato")) +
+  labs(x = "Iteration", y = "X", title = "Original sampler: proposal SD = 0.03") +
+  theme_pubr(base_size = 10, border = TRUE) +
+  theme(panel.grid = element_blank())
+
+# density plot
+p_density <- ggplot(trace_df, aes(x = x)) +
+  geom_histogram(
+    aes(
+      y = after_stat(density),
+      fill = start,
+      colour = start
+    ),
+    bins = 50,
+    position = "identity",
+    alpha = 0.1,
+    linewidth = 0.2
+  ) +
+  geom_density(aes(colour = start), linewidth = 0.5) +
+  stat_function(
+    fun = dnorm,
+    args = list(mean = 0, sd = 2),
+    colour = "black",
+    linetype = "dashed",
+    linewidth = 0.6,
+    inherit.aes = FALSE
+  ) +
+  scale_fill_manual(name = "Initial value",
+                    values = c("springgreen4", "tan2", "steelblue", "tomato")) +
+  scale_colour_manual(name = "Initial value",
+                      values = c("springgreen4", "tan2", "steelblue", "tomato")) +
+  labs(x = "X", y = "Density") +
+  theme_pubr(base_size = 10, border = TRUE) +
+  theme(panel.grid = element_blank())
+
+# numerical summaries
+chain_means <- rowMeans(original_draws)
+chain_vars <- apply(original_draws, 1, var)
+acceptance <- sapply(original_chains, function(fit)
+  fit$acceptance)
+
+chain_summary <- data.frame(
+  start = starts,
+  acceptance = round(acceptance, 3),
+  mean = round(chain_means, 3),
+  variance = round(chain_vars, 3)
+)
+
+chain_summary
+
+# Gelman–Rubin R
+rhat <- function(chains) {
+  chain_means <- rowMeans(chains)
+  chain_vars <- apply(chains, 1, var)
+
+  n_iter <- ncol(chains)
+  within <- mean(chain_vars)
+  between <- n_iter * var(chain_means)
+
+  var_hat <- (1 - 1 / n_iter) * within + between / n_iter
+  sqrt(var_hat / within)
+}
+
+rhat(original_draws)
+
+# combine the plots
+ggarrange(
+  p_trace,
+  p_density,
+  nrow = 2,
+  heights = c(1, 1.1),
+  common.legend = TRUE,
+  legend = "top"
+)
+```
+
+
 ## Task 3
+
+Explain what is wrong and why the acceptance rate alone is misleading.
+
+**Answer:**
+
+```{r}
+# extract draws and acceptance rates
+draws <- do.call(
+  rbind,
+  lapply(original_chains, function(fit) fit$draws)
+)
+
+acceptance <- sapply(
+  original_chains,
+  function(fit) fit$acceptance
+)
+
+# compute movement between consecutive iterations
+movement <- t(apply(draws, 1, diff))
+
+# lag-1 autocorrelation for each chain
+lag1_autocorrelation <- apply(draws, 1, function(x) {
+  cor(x[-length(x)], x[-1])
+})
+
+# standard deviation within each chain
+chain_sd <- apply(draws, 1, sd)
+
+# R-hat function
+rhat <- function(chains) {
+  chain_means <- rowMeans(chains)
+  chain_vars <- apply(chains, 1, var)
+
+  n_iter <- ncol(chains)
+  within <- mean(chain_vars)
+  between <- n_iter * var(chain_means)
+
+  var_hat <- (1 - 1 / n_iter) * within + between / n_iter
+  sqrt(var_hat / within)
+}
+
+data.frame(
+  start = starts,
+  acceptance = round(acceptance, 3),
+  mean_abs_step = round(mean(abs(movement)), 4),
+  lag1 = round(lag1_autocorrelation, 4),
+  chain_sd = round(chain_sd, 3)
+)
+
+rhat(draws)
+
+apply(draws, 1, function(x) coda::effectiveSize(x))
+```
+
+The proposal $SD$ is far too small. `acceptance` is close to 1, so almost every proposal is accepted. `mean_abs_step` is only about 0.023, showing that the chain barely moves. `lag1_autocorrelation` is almost 1, meaning consecutive draws contain almost no new information. Therefore the high acceptance rate indicates conservative tiny proposals rather than good exploration. `chain_sd` is far below the target standard deviation 2. the low effective sample size and large $\hat{R}$ demonstrate poor mixing.
 
 ## Task 4 
 
+Modify the simulation to obtain substantially better output. Justify the change and demonstrate
+the improvement.
+
+**Answer:**
+
+```{r}
+repaired_chains <- lapply(
+  starts,
+  function(initial) {
+    rw_normal(
+      initial = initial,
+      n_iter = 2000,
+      proposal_sd = 4
+    )
+  }
+)
+
+# extract the repaired draws and summaries
+repaired_draws <- do.call(
+  rbind,
+  lapply(repaired_chains, function(fit) fit$draws)
+)
+
+repaired_acceptance <- sapply(
+  repaired_chains,
+  function(fit) fit$acceptance
+)
+
+repaired_summary <- data.frame(
+  start = starts,
+  acceptance = round(repaired_acceptance, 3),
+  chain_mean = round(rowMeans(repaired_draws), 3),
+  chain_variance = round(apply(repaired_draws, 1, var), 3)
+)
+
+repaired_summary
+
+# the pooled summaries
+c(
+  acceptance = mean(repaired_acceptance),
+  mean = mean(repaired_draws),
+  variance = var(as.vector(repaired_draws)),
+  Rhat = rhat(repaired_draws)
+)
+
+# prepare repaired-chain data
+repaired_df <- do.call(rbind, lapply(seq_along(starts), function(i) {
+  data.frame(
+    iteration = seq_along(repaired_chains[[i]]$draws),
+    x = repaired_chains[[i]]$draws,
+    start = factor(starts[i])
+  )
+}))
+
+palette <- c("springgreen4", "tan2", "steelblue", "tomato")
+
+# Repaired trace plot
+p_repaired_trace <- ggplot(repaired_df,
+                           aes(x = iteration, y = x, colour = start)) +
+  annotate(
+    "rect",
+    xmin = -Inf, xmax = Inf,
+    ymin = -2, ymax = 2,
+    fill = "black", alpha = 0.06
+  ) +
+  geom_hline(yintercept = 0, colour = "black",
+             linetype = "dotted", linewidth = 0.3) +
+  geom_line(linewidth = 0.2) +
+  scale_colour_manual(name = "Initial value", values = palette) +
+  labs(
+    x = "Iteration",
+    y = "X",
+    title = "Repaired sampler: proposal SD = 4"
+  ) +
+  theme_pubr(base_size = 10, border = TRUE) +
+  theme(
+    panel.grid = element_blank(),
+    plot.title = element_text(size = 11, hjust = 0.5),
+    legend.position = "top"
+  )
+
+# repaired density plot
+p_repaired_density <- ggplot(repaired_df, aes(x = x)) +
+  geom_histogram(
+    aes(y = after_stat(density),
+        fill = start,
+        colour = start),
+    bins = 50,
+    position = "identity",
+    alpha = 0.08,
+    linewidth = 0.15
+  ) +
+  geom_density(
+    aes(colour = start),
+    linewidth = 0.4
+  ) +
+  stat_function(
+    fun = dnorm,
+    args = list(mean = 0, sd = 2),
+    colour = "black",
+    linetype = "dashed",
+    linewidth = 0.6,
+    inherit.aes = FALSE
+  ) +
+  scale_fill_manual(name = "Initial value", values = palette) +
+  scale_colour_manual(name = "Initial value", values = palette) +
+  labs(x = "X", y = "Density") +
+  theme_pubr(base_size = 10, border = TRUE) +
+  theme(
+    panel.grid = element_blank(),
+    legend.position = "top"
+  )
+
+# combine trace and density into one repaired figure
+ggarrange(
+  p_repaired_trace,
+  p_repaired_density,
+  nrow = 2,
+  heights = c(1, 1.1),
+  common.legend = TRUE,
+  legend = "top"
+)
+```
+I repaired the sampler by increasing the proposal standard deviation from 0.03 to 4. The original proposal scale was too small, producing a misleadingly high acceptance rate and very slow movement. The repaired sampler has an acceptance rate around 0.50, overlapping chains, chain variances close to 4, and $\hat R$ close to 1. The trace and density plots therefore show substantially better exploration and convergence.
+
 ## Task 5
+
+Compare estimates of $E(X)$ and $Var(X)$ with their known values.
+
+**Answer:**
+
+```{r}
+burn_in <- 500
+
+repaired_draws <- do.call(
+  rbind,
+  lapply(repaired_chains, function(fit) fit$draws)
+)
+
+retained_draws <- repaired_draws[, (burn_in + 1):2000]
+x <- as.vector(retained_draws)
+
+estimated_mean <- mean(x)
+estimated_variance <- var(x)
+
+c(
+  estimated_mean = estimated_mean,
+  estimated_variance = estimated_variance
+)
+```
+After combining the repaired chains and removing the first 500 iterations, the estimated mean was approximately `r round(estimated_mean, 2)` and the estimated variance was approximately `r round(estimated_variance, 2)`. These are close to the known target values $E(X)=0$ and $\operatorname{Var}(X)=4$, confirming that the repaired sampler recovers the target distribution accurately.
+
 
 # Exercise 4: Multimodality
 
+Consider$$\pi(x)=\frac{1}{2}\phi(x;-5,1)+\frac{1}{2}\phi(x;5,1)$$
+
 ## Task 1
+
+Implement the log target. Avoid unnecessary numerical instability when evaluating the
+mixture.
+
+**Answer:**
+
+Define the two Gaussian log-density components, omitting the common and normal constant:
+$$a=-\frac{1}{2}(x+5)^2,\qquad b=-\frac{1}{2}(x-5)^2$$
+To avoid numerical underflow, use the log-sum-exp trick. Let $$m = \text{max}(a,b)$$
+Then
+$$\log\pi(x)=m+log\big[\frac{1}{2}e^{a-m}+\frac{1}{2}e^{b-m}\big]+C$$
+where $C=-\frac{1}{2}\log(2\pi)$. The constant can be omitted in Metropolis-Hastings because it cancels.
+
+```{r}
+log_target <- function(x) {
+  a <- -0.5 * (x + 5)^2
+  b <- -0.5 * (x - 5)^2
+  m <- max(a, b)
+  
+  m + log(0.5 * exp(a - m) +
+            0.5 * exp(b - m))
+}
+
+# sampler with either a local random walk or an optional mode-jumping proposal
+mixture_sampler <- function(initial,
+                            n_iter = 15000,
+                            proposal_sd = 0.8,
+                            jump_prob = 0,
+                            jump_sd = 1,
+                            seed = 1) {
+  set.seed(seed)
+  
+  draws <- numeric(n_iter)
+  draws[1] <- initial
+  current <- initial
+  n_accepted <- 0
+  n_mode_switches <- 0
+  
+  for (i in 2:n_iter) {
+    if (jump_prob > 0 && runif(1) < jump_prob) {
+      # propose near the opposite mode
+      proposal <- -current + rnorm(1, mean = 0, sd = jump_sd)
+    } else {
+      # ordinary local Gaussian random walk
+      proposal <- current + rnorm(1, mean = 0, sd = proposal_sd)
+    }
+    
+    # both kernels are symmetric, so the acceptance ratio is just the target ratio.
+    log_acceptance_ratio <- log_target(proposal) - log_target(current)
+    
+    if (log(runif(1)) < log_acceptance_ratio) {
+      if (sign(proposal) != sign(current)) {
+        n_mode_switches <- n_mode_switches + 1
+      }
+      
+      current <- proposal
+      n_accepted <- n_accepted + 1
+    }
+    
+    draws[i] <- current
+  }
+  
+  list(
+    draws = draws,
+    acceptance = n_accepted / (n_iter - 1),
+    mode_switches = n_mode_switches
+  )
+}
+```
 
 ## Task 2
 
+Run four random-walk Metropolis chains of length 15,000 with proposal SD 0.8, starting near
+both modes.
+
+**Answer:**
+
+Use two starts near $a$ and two near $b$:
+
+```{r}
+starts <- c(-6, -4, 4, 6)
+n_iter <- 15000
+burn_in <- 1000
+
+# original local random-walk chains
+local_fit <- lapply(seq_along(starts), function(i) {
+  mixture_sampler(
+    initial = starts[i],
+    n_iter = n_iter,
+    proposal_sd = 0.8,
+    jump_prob = 0,
+    seed = 100 + i
+  )
+})
+
+data.frame(start = starts, acceptance = round(sapply(local_fit, function(fit)
+  fit$acceptance), 3))
+
+```
+
+The acceptance rates look reasonable.
+
 ## Task 3
+
+Plot the chains and calculate the fraction of retained draws greater than zero for each chain.
+
+**Answer:**
+
+Discard the first 1,000 iterations as burn-in, then calculate $$\hat P(X>0)=\frac{1}{N}\sum_tI(X_t>0)$$
+for each chain.
+
+```{r}
+burn_in <- 1000
+n_iter <- 15000
+
+fraction_positive <- sapply(local_fit, function(fit) {
+  mean(fit$draws[(burn_in + 1):n_iter] > 0)
+})
+
+fraction_table <- data.frame(start = starts,
+                             fraction_positive = round(fraction_positive, 3))
+
+fraction_table
+
+# plot the four chains
+trace_df <- do.call(rbind, lapply(seq_along(starts), function(i) {
+  data.frame(
+    iteration = 1:n_iter,
+    x = local_fit[[i]]$draws,
+    start = factor(starts[i])
+  )
+}))
+
+palette <- c("springgreen4", "tan2", "steelblue", "tomato")
+
+p_trace <- ggplot(trace_df, aes(x = iteration, y = x, colour = start)) +
+  geom_line(linewidth = 0.15) +
+  geom_hline(
+    yintercept = 0,
+    colour = "black",
+    linetype = "dashed",
+    linewidth = 0.3
+  ) +
+  facet_wrap( ~ start, ncol = 2) +
+  scale_colour_manual(name = "Initial value", values = palette) +
+  labs(x = "Iteration", y = "X", title = "Local random-walk Metropolis") +
+  theme_pubr(base_size = 10, border = TRUE) +
+  theme(
+    panel.grid = element_blank(),
+    strip.background = element_blank(),
+    plot.title = element_text(size = 11, hjust = 0.5),
+    legend.position = "top"
+  )
+p_trace
+```
+Because two equally weighted normal components are symmetric around 0, the true target probability is $P(X>0)=0.5$. These results show that the local random-walk chains are stable within one mode but do not explore the full bi-modal target. They are trapped near their starting modes.
 
 ## Task 4 
 
+Explain why a single apparently stable trace plot can be seriously misleading here.
+
+**Answer:**
+
+```{r}
+# take one chain started near the left mode
+single_chain <- local_fit[[1]]$draws
+retained <- single_chain[(burn_in + 1):n_iter]
+
+# summaries of the single chain
+single_chain_summary <- data.frame(
+  mean = mean(retained),
+  variance = var(retained),
+  fraction_positive = mean(retained > 0),
+  acceptance = local_fit[[1]]$acceptance
+)
+
+round(single_chain_summary, 3)
+```
+
+This chain looks stable because it fluctuate around -5, has variance close to 1, shows no obvious drift, and has a reasonable acceptance rate. However, it is only sampling $a$.
+
+```{r}
+target_summary <- data.frame(mean = 0,
+                             variance = 26,
+                             fraction_positive = 0.5)
+
+target_summary
+```
+The full target has different summaries.
+
 ## Task 5
+
+Modify the proposal mechanism to improve movement between modes. Demonstrate that your modification helps. More than one solution is possible.
+
+**Answer:**
+
+One effective modification is to add an explicit **mode-jumping proposal** to the original local random walk.
+
+With probability 0.15, propose near the opposite mode:$$x^*=-x+\varepsilon_J,
+\qquad
+\varepsilon_J\sim N(0,1).$$
+Otherwise, use the original local proposal:
+$$x^*=x+\varepsilon_L,
+\qquad
+\varepsilon_L\sim N(0,0.8^2).$$
+The mode-jumpint kernel is symmetric. If
+$$x^*=-x+\varepsilon_J,$$
+then the reverse move is
+$$x=-x^*+\varepsilon_J,$$
+which use the same normal increment. Hence, $$q(x^*\mid x)=q(x\mid x^*),$$
+and the acceptance probability remains
+$$\alpha(x,x^*)
+=
+\min\left\{
+1,\exp[\log\pi(x^*)-\log\pi(x)]
+\right\}.$$
+
+```{r}
+jump_chains <- lapply(seq_along(starts), function(i) {
+  mixture_sampler(
+    initial = starts[i],
+    n_iter = n_iter,
+    proposal_sd = 0.8,
+    jump_prob = 0.15,
+    jump_sd = 1,
+    seed = 100 + i
+  )
+})
+
+jump_fraction_positive <- sapply(jump_chains, function(fit) {
+  mean(fit$draws[(burn_in + 1):n_iter] > 0)
+})
+
+jump_results <- data.frame(
+  start = starts,
+  acceptance = round(sapply(jump_chains, `[[`, "acceptance"), 3),
+  fraction_positive = round(jump_fraction_positive, 3),
+  mode_switches = sapply(jump_chains, `[[`, "mode_switches")
+)
+
+jump_results
+```
+The modified chains produced approximately $(`r min(jump_results$mode_switches)` - `r max(jump_results$mode_switches)`)$ switches each and estimated fractions above zero close to 0.50, matching the symmetric target. This shows that the modified proposal moves efficiently between both modes rather than remaining trapped near one initial mode.
+
 
 # Exercise 5: MCMC as numerical integration
 
+Consider the unnormalized density
+$$\tilde \pi(x)=exp\bigg(-\frac{x^4}{4}+\frac{x^2}{2}\bigg)$$
+and
+$$\mu=E_{\pi} \left\{ \frac{1}{1+X^2} \right\}.$$
+
+
 ## Task 1
+
+Explain why Metropolis–Hastings does not require the normalizing constant.
+
+**Answer:**
+
+Suppose the normalized target is
+$$\pi(x)=\frac{\tilde \pi}{Z},\qquad Z=\int \tilde \pi dx,$$
+where $Z$ is unknown.
+
+The metropolis-Hastings acceptance probability is
+
+$$\alpha(x,x^*)
+=
+\min\left\{
+1,
+\frac{\pi(x^*)q(x\mid x^*)}
+{\pi(x)q(x^*\mid x)}
+\right\}.$$
+Substituting $$\pi(x)=\tilde\pi(x)/Z$$,
+
+$$\frac{\pi(x^*)}{\pi(x)}
+=
+\frac{\tilde\pi(x^*)/Z}{\tilde\pi(x)/Z}
+=
+\frac{\tilde\pi(x^*)}{\tilde\pi(x)}.$$
+
+The unknown normalizing constant $Z$ appears in both numerator and denominator and cancels.
 
 ## Task 2
 
+Use `integrate()` to obtain a high-accuracy numerical benchmark for $μ$.
+
+**Answer:**
+
+Define the unnormalized target and the function whose expectation is required:
+
+```{r}
+log_target <- function(x) {
+  -x^4 / 4 + x^2 / 2
+}
+
+unnormalized_target <- function(x) {
+  exp(log_target(x))
+}
+
+h_function <- function(x) {
+  1 / (1 + x^2)
+}
+```
+
+Compute the normalizing constant:
+
+$$Z=\int_{-\infty}^{\infty}\tilde\pi(x)\,dx.$$
+
+```{r}
+Z <- integrate(
+  unnormalized_target,
+  lower = -Inf,
+  upper = Inf,
+  subdivisions = 1000,
+  rel.tol = .Machine$double.eps^0.75
+)$value
+```
+
+Compute the numerator:
+
+$$N=\int_{-\infty}^{\infty}
+\frac{1}{1+x^2}\tilde\pi(x)\,dx.$$
+
+```{r}
+N <- integrate(
+  function(x) h_function(x) * unnormalized_target(x),
+  lower = -Inf,
+  upper = Inf,
+  subdivisions = 1000,
+  rel.tol = .Machine$double.eps^0.75
+)$value
+```
+
+Then the benchmark is
+
+$$\mu=\frac{N}{Z}.$$
+
+```{r}
+mu_benchmark <- N / Z
+
+c(
+  Z = Z,
+  numerator = N,
+  mu = mu_benchmark
+)
+```
+The benchmark values are approximately
+$$Z\approx`r round(Z, 3)`,\qquad N\approx `r round(N,3)`\qquad and\qquad\boxed{\mu\approx`r round(mu_benchmark, 3)`}$$
+
 ## Task 3
+
+Implement random-walk Metropolis. Choose a proposal scale using diagnostics rather than simply reporting the first value tried.
+
+**Answer:**
+
+```{r}
+rw_metropolis <- function(initial, n_iter, proposal_sd, seed = 1) {
+  set.seed(seed)
+  
+  draws <- numeric(n_iter)
+  draws[1] <- initial
+  current <- initial
+  n_accepted <- 0
+  
+  for (i in 2:n_iter) {
+    proposal <- current + rnorm(1, mean = 0, sd = proposal_sd)
+    
+    log_ratio <- log_target(proposal) - log_target(current)
+    
+    if (log(runif(1)) < log_ratio) {
+      current <- proposal
+      n_accepted <- n_accepted + 1
+    }
+    
+    draws[i] <- current
+  }
+  
+  list(draws = draws, acceptance = n_accepted / (n_iter - 1))
+}
+
+# run several chains and return a matrix with one chain per row
+run_chains <- function(starts, n_iter, proposal_sd, seed_base) {
+  draws <- matrix(NA_real_, nrow = length(starts), ncol = n_iter)
+  acceptance <- numeric(length(starts))
+  
+  for (k in seq_along(starts)) {
+    fit <- rw_metropolis(starts[k], n_iter, proposal_sd, seed_base + k)
+    draws[k, ] <- fit$draws
+    acceptance[k] <- fit$acceptance
+  }
+  
+  list(draws = draws, acceptance = acceptance)
+}
+
+# Gelman-Rubin R-hat
+rhat <- function(chains) {
+  chain_means <- rowMeans(chains)
+  chain_vars <- apply(chains, 1, var)
+  
+  n_iter <- ncol(chains)
+  within <- mean(chain_vars)
+  between <- n_iter * var(chain_means)
+  
+  var_hat <- (1 - 1 / n_iter) * within + between / n_iter
+  sqrt(var_hat / within)
+}
+
+# non-overlapping batch-means standard error
+batch_se <- function(chains, batch_size) {
+  batch_means <- apply(chains, 1, function(x) {
+    h <- h_function(x)
+    n_batches <- floor(length(h) / batch_size)
+    h <- h[1:(n_batches * batch_size)]
+    colMeans(matrix(h, nrow = batch_size))
+  })
+  
+  sd(as.vector(batch_means)) / sqrt(length(batch_means))
+}
+
+# tune proposal scales
+tune_n <- 20000
+tune_burn <- 2000
+proposal_grid <- c(0.5, 0.8, 1.0, 1.2, 1.5, 2.0, 2.5)
+
+tuning_results <- do.call(rbind, lapply(proposal_grid, function(s) {
+  run <- run_chains(
+    starts = starts,
+    n_iter = tune_n,
+    proposal_sd = s,
+    seed_base = 200
+  )
+  
+  retained <- run$draws[, (tune_burn + 1):tune_n]
+  
+  data.frame(
+    proposal_sd = s,
+    acceptance = mean(run$acceptance),
+    mu_estimate = mean(h_function(retained)),
+    Rhat = rhat(retained),
+    batch_se = batch_se(retained, batch_size = 500)
+  )
+}))
+
+print(tuning_results, digits = 4)
+
+# select proposal scale using the tuning diagnostics
+selected_sd <- tuning_results$proposal_sd[which.min(tuning_results$batch_se)]
+selected_sd
+```
+The proposal scale was selected by running four chains for several proposal standard deviations and comparing acceptance rate, $\hat R$, and batch-means standard errors. A proposal SD of `r proposal_grid[which.min(tuning_results$batch_se)]` gave $\hat R\approx1$, and acceptance rate around `r round(filter(tuning_results, proposal_sd==proposal_grid[which.min(tuning_results$batch_se)])[["acceptance"]],2)`, and the smallest batch standard error.
+
+```{r}
+#| fig-height: 5
+# final chains for plotting and estimation
+final_n <- 50000
+final_burn <- 5000
+
+final_run <- run_chains(
+  starts = starts,
+  n_iter = final_n,
+  proposal_sd = selected_sd,
+  seed_base = 300
+)
+
+final_draws <- final_run$draws
+
+# data frame for Task 3 plots
+final_df <- data.frame(
+  iteration = rep(seq_len(final_n), times = length(starts)),
+  x = as.vector(t(final_draws)),
+  start = factor(rep(starts, each = final_n))
+)
+
+palette <- c("springgreen4", "tan2", "steelblue", "tomato")
+
+# trace plots
+p_trace <- ggplot(final_df, aes(x = iteration, y = x, colour = start)) +
+  geom_line(linewidth = 0.1) +
+  facet_wrap( ~ start, ncol = 2) +
+  scale_colour_manual(name = "Initial value", values = palette) +
+  labs(x = "Iteration", y = "X", title = "Random-walk Metropolis trace plots") +
+  theme_pubr(base_size = 10, border = TRUE) +
+  theme(
+    panel.grid = element_blank(),
+    strip.background = element_blank(),
+    plot.title = element_text(size = 11, hjust = 0.5),
+    legend.position = "top"
+  )
+
+# density plot
+normalized_pdf <- function(x) {
+  unnormalized_target(x) / Z
+}
+
+p_density <- ggplot(final_df, aes(x = x)) +
+  geom_histogram(
+    aes(
+      y = after_stat(density),
+      fill = start,
+      colour = start
+    ),
+    bins = 100,
+    position = "identity",
+    alpha = 0.08,
+    linewidth = 0.1
+  ) +
+  stat_function(
+    fun = normalized_pdf,
+    colour = "black",
+    linetype = "dashed",
+    linewidth = 0.6,
+    inherit.aes = FALSE
+  ) +
+  scale_fill_manual(name = "Initial value", values = palette) +
+  scale_colour_manual(name = "Initial value", values = palette) +
+  labs(
+    x = "X",
+    y = "Density",
+    title = "Empirical densities and normalized target",
+    subtitle = paste0("Selected proposal SD = ", selected_sd)
+  ) +
+  theme_pubr(base_size = 10, border = TRUE) +
+  theme(
+    panel.grid = element_blank(),
+    strip.background = element_blank(),
+    plot.title = element_text(size = 11, hjust = 0.5),
+    legend.position = "top"
+  )
+
+# combine
+ggarrange(
+  p_trace,
+  p_density,
+  nrow = 2,
+  common.legend = TRUE,
+  legend = "top"
+)
+```
 
 ## Task 4 
 
+Estimate $\mu$ from retained MCMC draws.
+
+**Answer:**
+
+```{r}
+retained_draws <- final_draws[, (final_burn + 1):final_n]
+h_mat <- h_function(retained_draws)
+
+mu_mcmc <- mean(h_mat)
+
+# per-chain estimates as a convergence check
+chain_mu_table <- data.frame(
+  start = starts,
+  chain_mu = rowMeans(h_mat)
+)
+
+chain_mu_table
+mu_mcmc
+```
+Per chain estimates are shown to verify that all chains sample the same distribution. The final value is
+
+$$\hat \mu_{mcmc}\approx `r round(mu_mcmc,5)`,$$
+and the benchmark value is
+
+$$\hat \mu_{benchmark}\approx`r round(mu_benchmark, 5)`.$$
+They are close.
+
 ## Task 5
+
+Estimate the Monte Carlo standard error in a way that accounts for serial dependence. Compare it with the actual difference from the numerical benchmark. Explain why sd(h(x))/sqrt(M) is generally inappropriate for MCMC output.
+
+**Answer:**
+
+If the draws were independent, the standard error would be
+
+```{r}
+iid_se <- sd(as.vector(h_mat)) / sqrt(length(h_mat))
+```
+For the representative run,
+
+$$M=`r length(h_mat)`,\qquad SE_{iid}\approx `r round(iid_se,6)`.$$
+Split each retained chain into batches of length 1,000 and calculate the mean of $h(X_t)$ within each batch:
+
+```{r}
+mcmc_se <- batch_se(retained_draws, batch_size = 1000)
+```
+This gives
+$$SE_{batch}\approx `r round(mcmc_se,6)`.$$
+
+Compare with the benchmark
+
+```{r}
+actual_difference <- abs(mu_mcmc - mu_benchmark)
+z_score <- actual_difference / mcmc_se
+
+comparison_table <- data.frame(
+  quantity = c(
+    "Numerical benchmark",
+    "MCMC estimate",
+    "Absolute difference",
+    "IID-style SE",
+    "Batch-means SE",
+    "Difference / batch SE"
+  ),
+  value = c(
+    mu_benchmark,
+    mu_mcmc,
+    actual_difference,
+    iid_se,
+    mcmc_se,
+    z_score
+  )
+)
+
+comparison_table
+```
+The actual difference is about $\frac{\text{actual difference}}{\text{MCMC standard error}} \approx `r round(actual_difference/mcmc_se, 1)`$ batch standard errors, which is plausible for a finite Monte Carlo run.
+
+The naive formula $\frac{sd(h(X))}{\sqrt M}$ assumes that all $M$ draws are independent and identically distributed. MCMC draws are usually serially correlated, and here $h(X_t)$ has positive lag-1 autocorrelation (see below). 
+
+```{r}
+lag1_autocorrelation <- apply(retained_draws, 1, function(x) {
+  h <- 1 / (1 + x^2)
+  cor(h[-length(h)], h[-1])
+})
+mean(lag1_autocorrelation)
+```
+
+Positive dependence means that each new draw adds less information than an independent draw, so the effective sample size is smaller than $M$.
+
+Therefore, the naive formula generally underestimates Monto Carlo uncertainty. Batch means are more appropriate in this case, as they account for the serial dependence.
+
+```{r}
+#| fig-width: 8
+#| fig-height: 3
+# running estimate plot
+running_df <- data.frame(
+  iteration = (final_burn + 1):final_n,
+  running_estimate = cumsum(colMeans(h_mat)) / seq_len(ncol(h_mat))
+)
+
+p_running <- ggplot(running_df, aes(x = iteration, y = running_estimate)) +
+  geom_line(colour = "springgreen4", linewidth = 0.5) +
+  geom_hline(
+    yintercept = mu_benchmark,
+    colour = "tomato",
+    linetype = "dashed",
+    linewidth = 0.5
+  ) +
+  labs(x = "Iteration", y = "Running average of h(X)", title = "Convergence of the MCMC estimate") +
+  theme_pubr(base_size = 10, border = TRUE) +
+  theme(panel.grid = element_blank(),
+        plot.title = element_text(size = 11, hjust = 0.5))
+
+# Batch SE plot
+batch_sizes <- c(250, 500, 1000, 2000)
+
+batch_df <- data.frame(
+  batch_size = factor(batch_sizes),
+  batch_se = sapply(batch_sizes, function(b) {
+    batch_se(retained_draws, b)
+  })
+)
+
+p_batch <- ggplot(batch_df, aes(x = batch_size, y = batch_se, group = 1)) +
+  geom_line(
+    aes(colour = "Batch-means SE"),
+    linewidth = 0.5
+  ) +
+  geom_point(
+    aes(colour = "Batch-means SE"),
+    size = 2
+  ) +
+  geom_hline(
+    aes(yintercept = iid_se, colour = "IID-style SE"),
+    linetype = "dashed",
+    linewidth = 0.5
+  ) +
+  scale_colour_manual(
+    name = NULL,
+    values = c(
+      "Batch-means SE" = "springgreen4",
+      "IID-style SE" = "tomato"
+    )
+  ) +
+  labs(
+    x = "Batch size",
+    y = "Monte Carlo standard error",
+    title = "Batch SE diagnostics"
+  ) +
+  theme_pubr(base_size = 10, border = TRUE) +
+  theme(
+    panel.grid = element_blank(),
+    plot.title = element_text(size = 11, hjust = 0.5),
+    legend.position = c(0.78, 0.25),
+    legend.background = element_blank()
+  )
+
+
+ggarrange(p_running, p_batch, ncol = 2)
+```
 
