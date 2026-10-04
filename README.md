@@ -84,7 +84,7 @@ Each week follows the same layout: `Exercises/` holds the worked assignments
 
 ### Lecture 4 — Monte Carlo Methods
 - The Monte Carlo principle: estimate an expectation $\theta=E[h(X)]$ by the sample mean $\hat\theta=\frac{1}{m}\sum_{i=1}^m h(X_i)$ over independent draws from $f$.
-- Large-sample behavior: the strong law gives consistency, $\operatorname{Var}(\hat\theta)=\sigma_h^2/m$ gives the $m^{-1/2}$ rate, and the CLT justifies intervals $\hat\theta\pm1.96\,s/\sqrt{m}$.
+- Large-sample behavior: the strong law gives consistency, $\mathrm{Var}(\hat\theta)=\sigma_h^2/m$ gives the $m^{-1/2}$ rate, and the CLT justifies intervals $\hat\theta\pm1.96\,s/\sqrt{m}$.
 - Distinguish statistical sampling error (finite observed data) from Monte Carlo error (finite number of simulations); increasing $m$ reduces only the latter.
 - Examples: integrating $x^4$ and $\sin x$ over finite intervals, higher-dimensional integrals, and estimating $\pi$ from points inside a unit quarter-circle; halving the Monte Carlo standard error requires four times as many draws.
 - Simulation studies as statistical experiments: estimate bias, variance and MSE via the bias–variance decomposition, confidence-interval coverage (a Bernoulli proportion with its own Monte Carlo SE), and test power.
