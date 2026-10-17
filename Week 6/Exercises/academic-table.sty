@@ -1,0 +1,25 @@
+% Academic / Nature-style table formatting for Quarto PDF output
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{etoolbox}
+
+% Nature-style caption separator: Table 1 | Caption text
+\DeclareCaptionLabelSeparator{pipe}{~\textbar~}
+\captionsetup[table]{
+  labelsep=pipe,
+  labelfont={bf,sf},
+  textfont={sf},
+  font=small,
+  skip=5pt,
+  position=top
+}
+
+% Booktabs rule weights
+\setlength{\heavyrulewidth}{0.9pt}
+\setlength{\lightrulewidth}{0.5pt}
+
+% Compact, sans-serif table text
+\renewcommand{\arraystretch}{1.2}
+\AtBeginEnvironment{tabular}{\small\sffamily}
+\AtBeginEnvironment{tabular*}{\small\sffamily}
+\AtBeginEnvironment{longtable}{\small\sffamily}
