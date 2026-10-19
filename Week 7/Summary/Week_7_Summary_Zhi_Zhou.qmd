@@ -1,0 +1,20 @@
+---
+title: "MAST32001 Week 7 Summary"
+author: "Zhi Zhou"
+date: today
+format:
+  pdf:
+    documentclass: article
+    papersize: a4
+    fontsize: 11pt
+    geometry: margin=2.5cm
+    linestretch: 1.15
+---
+
+This week, the lectures focused on a particular and rather powerful computational concept: the intentional inclusion of unobserved variables in the original data. In Lecture 13 we discussed data augmentation by latent variables and predictor augmentation, and in Lecture 14 we generalized the idea of artificial variables to the construction of knockoffs for controlled variable selection. The lectures together showed how the same modeling technique, the introduction of synthetic quantities, can be used to reach very different inferential goals, from simplifying complicated likelihoods to assessing how many of our discoveries we can actually trust.
+
+In Lecture 13, we started by considering the distinction between the observed-data model and the augmented model, observing that an intractable likelihood can become conditionally tractable when conditioned on a latent variable Z. The three different perspectives of the same augmented model EM, Gibbs sampling and variational inference, showed how one representation can give rise to different algorithms, and this was related to the ELBO from Lecture 12. We looked at EM in detail, including the expectation step (where we take an average over the conditional distribution of the missing data, rather than a single guess), the maximization step, and the monotonicity property, and then applied EM to Gaussian mixture models with soft responsibilities. We also discussed how to formulate probit regression in terms of latent Gaussian variables, so that Bayesian estimation becomes an alternation between truncated-normal sampling and ordinary Gaussian regression, and how the choice of parameterization (centred or non-centred) affects MCMC efficiency. In the second part of the lecture, predictor augmentation (as proposed by Luo and Li) was introduced, whereby artificial noise variables are added to reveal the signal/noise boundary and determine the structural order, as carried out by the PCAaug function in the ICtest package.
+
+We discussed in the fourth lecture the problem of multiplicity in variable selection, the fact that when a large number of variables are examined some will appear to be important by chance alone. We defined the terms discovery, false discovery, false discovery proportion (FDP) and false discovery rate (FDR) and compared the FDR with the more stringent family-wise error rate (FWER). The knockoff method creates a synthetic copy of each original variable that has the same dependence structure as the predictors but does not contain information about the response and then compares each pair. We examined the Gram-matrix conditions under the fixed-X assumption and discussed the loss of power with highly correlated predictors. Under the model-X assumption, we explored pairwise exchangeability, conditional independence of the knockoff and response, and the conditional definition of a null variable. The sign-flip principle that null statistics look like fair coin flips allows us to use negative statistics to calibrate the number of false positives, and the knockoff-plus-threshold makes this calibration a finite-sample FDR guarantee.
+
+This week, data augmentation was easy to grasp since missing or latent information could be treated as known and then averaged over its uncertainty range. That point was made clear through the use of the mixture model and the probit examples. The most difficult aspect was remembering the technical assumptions, such as the plus-one property and antisymmetry of X, that give finite-sample model X, and the way in which the plus-one correction in knockoff plus leads to finite-sample FDR control. 
